@@ -1,12 +1,51 @@
 (function () {
   'use strict';
 
-  var LAVA_COLOR = '#ff3b47';
+  var LAVA_COLOR = '#35e08a';
 
   function hexRgb(hex) {
     var h = hex.replace('#', '');
     var n = parseInt(h.length === 3 ? h.split('').map(function (c) { return c + c; }).join('') : h, 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var h, s, l = (max + min) / 2;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return [h, s, l];
+  }
+
+  function hslToRgb(h, s, l) {
+    var r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      var hue2rgb = function (p, q, t) {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      var p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1 / 3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1 / 3);
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
   }
 
   function rnd(a, b) {
@@ -21,14 +60,11 @@
     var rgb = hexRgb(LAVA_COLOR);
     var r = rgb[0], g = rgb[1], b = rgb[2];
 
-    // hot core: blend the base color toward a warm yellow highlight, fire-like glow
-    var HIGHLIGHT = [255, 214, 120];
-    var CORE_MIX = 0.55;
-    var core = [
-      Math.round(r + (HIGHLIGHT[0] - r) * CORE_MIX),
-      Math.round(g + (HIGHLIGHT[1] - g) * CORE_MIX),
-      Math.round(b + (HIGHLIGHT[2] - b) * CORE_MIX)
-    ];
+    // hot core: rotate the hue forward and lighten, for a fire-like glow
+    // (matches the design tool: orange base -> yellow core, green base -> cyan core)
+    var HUE_SHIFT = 25 / 360;
+    var hsl = rgbToHsl(r, g, b);
+    var core = hslToRgb((hsl[0] + HUE_SHIFT) % 1, hsl[1], Math.min(hsl[2] + 0.15, 0.70));
     var edgeColor = 'rgb(' + r + ', ' + g + ', ' + b + ')';
     var coreColor = 'rgb(' + core[0] + ', ' + core[1] + ', ' + core[2] + ')';
 
