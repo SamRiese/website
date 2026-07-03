@@ -166,11 +166,6 @@ html, body {
   word-spacing: -0.3em;
 }
 
-.name .i-tight {
-  display: inline-block;
-  margin: 0 -0.07em;
-}
-
 .socials {
   display: flex;
   align-items: center;
