@@ -21,6 +21,25 @@
     var rgb = hexRgb(LAVA_COLOR);
     var r = rgb[0], g = rgb[1], b = rgb[2];
 
+    // hot core: blend the base color toward a warm yellow highlight, fire-like glow
+    var HIGHLIGHT = [255, 214, 120];
+    var CORE_MIX = 0.55;
+    var core = [
+      Math.round(r + (HIGHLIGHT[0] - r) * CORE_MIX),
+      Math.round(g + (HIGHLIGHT[1] - g) * CORE_MIX),
+      Math.round(b + (HIGHLIGHT[2] - b) * CORE_MIX)
+    ];
+    var edgeColor = 'rgb(' + r + ', ' + g + ', ' + b + ')';
+    var coreColor = 'rgb(' + core[0] + ', ' + core[1] + ', ' + core[2] + ')';
+
+    function hotFill(cx, cy, rx, ry) {
+      var radius = Math.max(rx, ry) * 2.0;
+      var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      grad.addColorStop(0, coreColor);
+      grad.addColorStop(1, edgeColor);
+      ctx.fillStyle = grad;
+    }
+
     var blobs = [];
     for (var i = 0; i < 7; i++) {
       blobs.push({
@@ -42,17 +61,19 @@
       ctx.fillStyle = 'rgb(' + Math.round(r * 0.10) + ', ' + Math.round(g * 0.10) + ', ' + Math.round(b * 0.10) + ')';
       ctx.fillRect(0, 0, W, H);
 
-      ctx.fillStyle = 'rgb(' + r + ', ' + g + ', ' + b + ')';
-
       // molten pool at the bottom
-      ctx.beginPath();
       var poolWobble = Math.sin(t * 0.35) * 5;
-      ctx.ellipse(W / 2, H + 38 + poolWobble, W * 0.60, 74, 0, 0, Math.PI * 2);
+      var poolY = H + 38 + poolWobble;
+      hotFill(W / 2, poolY, W * 0.60, 74);
+      ctx.beginPath();
+      ctx.ellipse(W / 2, poolY, W * 0.60, 74, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // small pool clinging to the top
+      var topY = -26 + Math.sin(t * 0.22 + 2) * 4;
+      hotFill(W / 2, topY, W * 0.30, 34);
       ctx.beginPath();
-      ctx.ellipse(W / 2, -26 + Math.sin(t * 0.22 + 2) * 4, W * 0.30, 34, 0, 0, Math.PI * 2);
+      ctx.ellipse(W / 2, topY, W * 0.30, 34, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // rising / sinking blobs
@@ -65,6 +86,7 @@
         var speedFactor = Math.abs(Math.cos((t / bl.period) * Math.PI * 2 + bl.phase));
         var ry = bl.r * bl.squish * (1 + 0.35 * speedFactor);
         var rx = bl.r * (1 - 0.18 * speedFactor);
+        hotFill(x, y, rx, ry);
         ctx.beginPath();
         ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
         ctx.fill();
