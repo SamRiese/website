@@ -18,23 +18,6 @@ html, body {
   50% { transform: scale(1.12); }
 }
 
-@keyframes textGlow {
-  0%, 100% {
-    text-shadow:
-      -10px 0 22px var(--lava-a70),
-      -26px 0 70px var(--lava-a40),
-      -60px 0 140px var(--lava-a22),
-      0 0 1px rgba(255,255,255,0.5);
-  }
-  50% {
-    text-shadow:
-      -12px 0 30px var(--lava-a70),
-      -32px 0 90px var(--lava-a40),
-      -70px 0 170px var(--lava-a40),
-      0 0 2px rgba(255,255,255,0.6);
-  }
-}
-
 @keyframes lampHalo {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 1; }
@@ -180,7 +163,7 @@ html, body {
   color: #ffffff;
   text-wrap: balance;
   letter-spacing: -0.02em;
-  animation: textGlow 7s ease-in-out infinite;
+  word-spacing: -0.3em;
 }
 
 .socials {
