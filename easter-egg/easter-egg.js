@@ -6,7 +6,7 @@
   const SEGMENTS = 7;
   const WARP = 0.1;
 
-  const canvas = document.getElementById('hypno-canvas');
+  const canvas = document.getElementById('easter-egg-canvas');
   const gl = canvas.getContext('webgl', { antialias: false });
   if (!gl) return;
 
