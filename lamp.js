@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var LAVA_COLOR = '#ff7a1a';
+  var LAVA_COLOR = '#ff3b47';
 
   function hexRgb(hex) {
     var h = hex.replace('#', '');

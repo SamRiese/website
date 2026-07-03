@@ -5,7 +5,7 @@ html, body {
 }
 
 :root {
-  --lava: #ff7a1a;
+  --lava: #ff3b47;
   --glow: 0.7;
   --lava-a70: color-mix(in srgb, var(--lava) 70%, transparent);
   --lava-a40: color-mix(in srgb, var(--lava) 40%, transparent);
@@ -200,14 +200,18 @@ html, body {
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.02);
   text-decoration: none;
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, border 0.25s ease, background 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .social-link:hover {
   color: #ffffff;
-  border: 1px solid var(--lava-a40);
-  background: var(--lava-a12);
-  box-shadow: 0 0 24px var(--lava-a22);
+  border-color: rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.05);
+  transform: translateY(-4px);
+}
+
+.social-link:active {
+  transform: translateY(-1px);
 }
 
 @media (max-width: 640px) {
