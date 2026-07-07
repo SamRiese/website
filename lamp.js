@@ -52,29 +52,43 @@
     return a + Math.random() * (b - a);
   }
 
+  function clamp01(v) {
+    return v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
   function initLamp() {
     var canvas = document.getElementById('lavaCanvas');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
-    var W = canvas.width, H = canvas.height;
+
+    // simulate in logical (CSS-pixel) space so the blob motion/sizing math
+    // below is unchanged, but render into a buffer scaled by the device's
+    // pixel ratio so the metaballs stay crisp on retina/high-DPI screens
+    var LW = canvas.width, LH = canvas.height;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = Math.round(LW * dpr), H = Math.round(LH * dpr);
+    canvas.width = W;
+    canvas.height = H;
+
     var rgb = hexRgb(LAVA_COLOR);
     var r = rgb[0], g = rgb[1], b = rgb[2];
 
-    // hot core: rotate the hue forward and lighten, for a fire-like glow
-    // (matches the design tool: orange base -> yellow core, green base -> cyan core)
+    // three-tier glow: dark rim (base color) -> mid (hue-rotated) -> hot white core
     var HUE_SHIFT = 25 / 360;
     var hsl = rgbToHsl(r, g, b);
-    var core = hslToRgb((hsl[0] + HUE_SHIFT) % 1, hsl[1], Math.min(hsl[2] + 0.15, 0.70));
-    var edgeColor = 'rgb(' + r + ', ' + g + ', ' + b + ')';
-    var coreColor = 'rgb(' + core[0] + ', ' + core[1] + ', ' + core[2] + ')';
+    var mid = hslToRgb((hsl[0] + HUE_SHIFT) % 1, hsl[1], Math.min(hsl[2] + 0.15, 0.70));
+    var hot = hslToRgb((hsl[0] + HUE_SHIFT) % 1, hsl[1] * 0.15, 0.93);
+    var edgeR = r, edgeG = g, edgeB = b;
+    var midR = mid[0], midG = mid[1], midB = mid[2];
+    var hotR = hot[0], hotG = hot[1], hotB = hot[2];
+    var bgR = Math.round(r * 0.16), bgG = Math.round(g * 0.16), bgB = Math.round(b * 0.16);
 
-    function hotFill(cx, cy, rx, ry) {
-      var radius = Math.max(rx, ry) * 2.0;
-      var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      grad.addColorStop(0, coreColor);
-      grad.addColorStop(1, edgeColor);
-      ctx.fillStyle = grad;
-    }
+    // field thresholds (F ranges 0..1 for an isolated blob, higher where blobs
+    // overlap): crisp bands from background -> green rim -> cyan mid -> white core
+    var EDGE_LO = 0.04;
+    var EDGE_HI = 0.10;
+    var MID_HI = 0.20;
+    var CORE_HI = 0.80;
 
     var blobs = [];
     for (var i = 0; i < 7; i++) {
@@ -89,46 +103,104 @@
       });
     }
 
+    var img = ctx.createImageData(W, H);
+    var data = img.data;
+    var sources = [];
+
     var t0 = performance.now();
 
     function draw() {
       var t = (performance.now() - t0) / 1000;
 
-      ctx.fillStyle = 'rgb(' + Math.round(r * 0.10) + ', ' + Math.round(g * 0.10) + ', ' + Math.round(b * 0.10) + ')';
-      ctx.fillRect(0, 0, W, H);
+      sources.length = 0;
 
       // molten pool at the bottom
       var poolWobble = Math.sin(t * 0.35) * 5;
-      var poolY = H + 38 + poolWobble;
-      hotFill(W / 2, poolY, W * 0.60, 74);
-      ctx.beginPath();
-      ctx.ellipse(W / 2, poolY, W * 0.60, 74, 0, 0, Math.PI * 2);
-      ctx.fill();
+      var poolY = LH + 38 + poolWobble;
+      addSource(sources, LW / 2, poolY, LW * 0.60, 74);
 
       // small pool clinging to the top
       var topY = -26 + Math.sin(t * 0.22 + 2) * 4;
-      hotFill(W / 2, topY, W * 0.30, 34);
-      ctx.beginPath();
-      ctx.ellipse(W / 2, topY, W * 0.30, 34, 0, 0, Math.PI * 2);
-      ctx.fill();
+      addSource(sources, LW / 2, topY, LW * 0.30, 34);
 
       // rising / sinking blobs
       for (var j = 0; j < blobs.length; j++) {
         var bl = blobs[j];
         var yn = 0.5 - 0.5 * Math.sin((t / bl.period) * Math.PI * 2 + bl.phase);
-        var y = 34 + yn * (H - 58);
-        var half = (0.20 + 0.24 * (y / H)) * W;
-        var x = W / 2 + Math.sin((t / bl.xPeriod) * Math.PI * 2 + bl.xPhase) * Math.min(bl.xAmp, Math.max(2, half - bl.r));
+        var y = 34 + yn * (LH - 58);
+        var half = (0.20 + 0.24 * (y / LH)) * LW;
+        var x = LW / 2 + Math.sin((t / bl.xPeriod) * Math.PI * 2 + bl.xPhase) * Math.min(bl.xAmp, Math.max(2, half - bl.r));
         var speedFactor = Math.abs(Math.cos((t / bl.period) * Math.PI * 2 + bl.phase));
         var ry = bl.r * bl.squish * (1 + 0.35 * speedFactor);
         var rx = bl.r * (1 - 0.18 * speedFactor);
-        hotFill(x, y, rx, ry);
-        ctx.beginPath();
-        ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
+        addSource(sources, x, y, rx, ry);
       }
 
+      renderField(sources);
+      ctx.putImageData(img, 0, 0);
+
+      // warm ambient wash pooling near the base, drawn with a standard
+      // (non-blend-mode) additive composite so it renders identically
+      // across browser engines
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var grad = ctx.createRadialGradient(W / 2, H * 0.98, 0, W / 2, H * 0.98, H * 0.55);
+      grad.addColorStop(0, 'rgba(' + edgeR + ',' + edgeG + ',' + edgeB + ',0.35)');
+      grad.addColorStop(0.6, 'rgba(' + edgeR + ',' + edgeG + ',' + edgeB + ',0.10)');
+      grad.addColorStop(1, 'rgba(' + edgeR + ',' + edgeG + ',' + edgeB + ',0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, H * 0.35, W, H * 0.65);
+      ctx.restore();
+
       requestAnimationFrame(draw);
+    }
+
+    function addSource(list, x, y, rx, ry) {
+      list.push({ x: x, y: y, invRx2: 1 / (rx * rx), invRy2: 1 / (ry * ry) });
+    }
+
+    function renderField(list) {
+      var idx = 0;
+      for (var py = 0; py < H; py++) {
+        var ly = py / dpr;
+        for (var px = 0; px < W; px++) {
+          var lx = px / dpr;
+          var F = 0;
+          for (var i = 0; i < list.length; i++) {
+            var s = list[i];
+            var dx = lx - s.x, dy = ly - s.y;
+            var nd2 = dx * dx * s.invRx2 + dy * dy * s.invRy2;
+            if (nd2 < 1) {
+              var bump = 1 - nd2;
+              F += bump * bump;
+            }
+          }
+
+          var cr = bgR, cg = bgG, cb = bgB;
+          if (F > EDGE_LO) {
+            var edgeT = clamp01((F - EDGE_LO) / (EDGE_HI - EDGE_LO));
+            cr = cr + (edgeR - cr) * edgeT;
+            cg = cg + (edgeG - cg) * edgeT;
+            cb = cb + (edgeB - cb) * edgeT;
+
+            var midT = clamp01((F - EDGE_HI) / (MID_HI - EDGE_HI));
+            cr = cr + (midR - cr) * midT;
+            cg = cg + (midG - cg) * midT;
+            cb = cb + (midB - cb) * midT;
+
+            var hotT = clamp01((F - MID_HI) / (CORE_HI - MID_HI));
+            cr = cr + (hotR - cr) * hotT;
+            cg = cg + (hotG - cg) * hotT;
+            cb = cb + (hotB - cb) * hotT;
+          }
+
+          data[idx] = cr;
+          data[idx + 1] = cg;
+          data[idx + 2] = cb;
+          data[idx + 3] = 255;
+          idx += 4;
+        }
+      }
     }
 
     requestAnimationFrame(draw);
